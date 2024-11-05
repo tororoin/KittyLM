@@ -21,38 +21,41 @@ class Attention(nn.Module):
     def __init__(self, config):
         super(Attention).__init__()
         # generating linear projections of size n_embed * n_embed for Q, K, V
-        self.q_proj = nn.Linear(config.n_embed, config.n_embed, bias = config.bias)
-        self.k_proj = nn.Linear(config.n_embed, config.n_embed, bias = config.bias)
-        self.v_proj = nn.Linear(config.n_embed, config.n_embed, bias = config.bias)
+        self.q_proj = nn.Linear(config.n_embed, config.d_model, bias = config.bias)
+        self.k_proj = nn.Linear(config.n_embed, config.d_model, bias = config.bias)
+        self.v_proj = nn.Linear(config.n_embed, config.d_model, bias = config.bias)
 
         # final projection after attention
-        self.projection = nn.Linear(config.n_embed, config.n_embed, bias = config.bias)
+        self.projection = nn.Linear(config.n_embed, config.d_model, bias = config.bias)
 
         # these are self-explanatory
         self.attention_dropout = nn.Dropout(config.dropout)
         self.residual_dropout = nn.Dropout(config.dropout)
 
         self.n_head = config.n_head
-        self.n_embed = config.n_embed
+        self.d_model = config.d_model
         self.dropout = config.dropout
 
         self.register_buffer(
             'causal_mask', 
-            torch.tril(torch.ones(config.block_size, config.block_size)) #create a block_size * block_size mask
-            .view(1, 1, config.block_size, config.block_size) #add singletons so that shape is B * nh * block_size * block_size
+            torch.tril(torch.ones(config.block_size, config.block_size)) # create a block_size * block_size mask
+            .view(1, 1, config.block_size, config.block_size) # add singletons so that shape is B * nh * block_size * block_size
         )
 
     def forward(self, input):
         B, T, D = input.size() # batch, length, dimension
 
-        # reshape q,k,v to (B, nh, T, hs)
-        q = self.q_proj.view(B, T, self.n_head, D // self.n_head).transpose(1, 2)
-        k = self.k_proj.view(B, T, self.n_head, D // self.n_head).transpose(1, 2)
-        v = self.v_proj.view(B, T, self.n_head, D // self.n_head).transpose(1, 2)
+        # reshape q,k,v to (B, nh, T, hs) from (B, T, D) -> (B, T, nh, hs) -> (B, nh, T, hs)
+        # view shouldnt be used to transpose / permute as it messes up the data. chain a 
+        # seperate transpose operation to transpose the the sequence length and head dimensions 
+
+        q = self.q_proj(input).view(B, T, self.n_head, D // self.n_head).transpose(1, 2)
+        k = self.k_proj(input).view(B, T, self.n_head, D // self.n_head).transpose(1, 2)
+        v = self.v_proj(input).view(B, T, self.n_head, D // self.n_head).transpose(1, 2)
 
         # lets manually compute the attention score without einsum
         e = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-        e = e.masked_fill(self.causal_mask[:, :, T, T] == 0, float('-inf'))
+        e = e.masked_fill(self.causal_mask[:, :, T, T] == 0, float('-inf'))  # masking only the actual inportant information across sequencelength and head dimension
         alpha = F.softmax(e, dim = -1)
         alpha = self.attention_dropout(alpha)
         attention = alpha @ v
