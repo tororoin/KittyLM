@@ -1,0 +1,10 @@
+setup.py
+KittyLM/__init__.py
+KittyLM/layers.py
+KittyLM/model.py
+KittyLM.egg-info/PKG-INFO
+KittyLM.egg-info/SOURCES.txt
+KittyLM.egg-info/dependency_links.txt
+KittyLM.egg-info/top_level.txt
+scripts/__init__.py
+scripts/attention_paritycheck.py
