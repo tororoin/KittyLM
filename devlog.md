@@ -30,6 +30,7 @@
 
 - gsm8k : grade school math problems by OpenAI ig
 - mmlu
--
+- winograd
+- winogrande (this looks big)
 
 I'm writing the rest of the gpt model along with the training code.  Michael wants most of it by Thursday, but there is no pressure
