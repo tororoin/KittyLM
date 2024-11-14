@@ -6,7 +6,7 @@ import torch.nn.functional as F
 class MLP(nn.Module):
     #pass 
     def __init__(self, config):
-        super(MLP).__init__()
+        super().__init__()
         self.c_fc = nn.Linear(config.d_model, 4*config.d_model, bias = config.bias)
         self.c_proj = nn.Linear(4*config.d_model, config.d_model, bias = config.bias)
         self.activation = nn.GELU() # avoid sudden zeroout of gradients and have a smoother actovation 
@@ -19,22 +19,22 @@ class MLP(nn.Module):
 class Attention(nn.Module):
     #pass
     def __init__(self, config):
-        super(Attention).__init__()
-        # generating linear projections of size n_embed * n_embed for Q, K, V
-        self.q_proj = nn.Linear(config.n_embed, config.d_model, bias = config.bias)
-        self.k_proj = nn.Linear(config.n_embed, config.d_model, bias = config.bias)
-        self.v_proj = nn.Linear(config.n_embed, config.d_model, bias = config.bias)
-
+        super(Attention, self).__init__()
+        self.q_proj = nn.Linear(config.d_model, config.d_model, bias = config.bias)
+        self.k_proj = nn.Linear(config.d_model, config.d_model, bias = config.bias)
+        self.v_proj = nn.Linear(config.d_model, config.d_model, bias = config.bias)
+        self.c_attn = nn.Linear(config.d_model, 3 * config.d_model, bias=config.bias)
         # final projection after attention
-        self.projection = nn.Linear(config.n_embed, config.d_model, bias = config.bias)
+        self.projection = nn.Linear(config.d_model, config.d_model, bias = config.bias)
 
         # these are self-explanatory
         self.attention_dropout = nn.Dropout(config.dropout)
         self.residual_dropout = nn.Dropout(config.dropout)
 
-        self.n_head = config.n_head
+        self.n_heads = config.n_heads
         self.d_model = config.d_model
         self.dropout = config.dropout
+        self.head_size = self.d_model // self.n_heads
 
         self.register_buffer(
             'causal_mask', 
@@ -48,30 +48,31 @@ class Attention(nn.Module):
         # reshape q,k,v to (B, nh, T, hs) from (B, T, D) -> (B, T, nh, hs) -> (B, nh, T, hs)
         # view shouldnt be used to transpose / permute as it messes up the data. chain a 
         # seperate transpose operation to transpose the the sequence length and head dimensions 
-
-        q = self.q_proj(input).view(B, T, self.n_head, D // self.n_head).transpose(1, 2)
-        k = self.k_proj(input).view(B, T, self.n_head, D // self.n_head).transpose(1, 2)
-        v = self.v_proj(input).view(B, T, self.n_head, D // self.n_head).transpose(1, 2)
+        # q, k, v  = self.c_attn(input).split(self.d_model, dim=2)
+        q = self.q_proj(input).view(B, T, self.n_heads, self.head_size).transpose(1, 2)
+        k = self.k_proj(input).view(B, T, self.n_heads, self.head_size).transpose(1, 2)
+        v = self.v_proj(input).view(B, T, self.n_heads, self.head_size).transpose(1, 2)
 
         # lets manually compute the attention score without einsum
         e = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-        e = e.masked_fill(self.causal_mask[:, :, T, T] == 0, float('-inf'))  # masking only the actual inportant information across sequencelength and head dimension
+        e = e.masked_fill(self.causal_mask[:, :, :T, :T] == 0, float('-inf'))  # masking only the actual inportant information across sequencelength and head dimension
         alpha = F.softmax(e, dim = -1)
         alpha = self.attention_dropout(alpha)
         attention = alpha @ v
-        attention = attention.transpose(1, 2).contigious().view(B, T, D) # hstack all heads
+        attention = attention.transpose(1, 2).contiguous().view(B, T, D) # hstack all heads
         attention = self.projection(attention)
         attention = self.residual_dropout(attention)
 
         return attention
 
+
 class LayerNorm(nn.Module):
     #pass
     def __init__(self, d_model, bias):
-        super(LayerNorm).__init__()
+        super().__init__()
         self.weight = nn.Parameter(torch.ones(d_model))
         if bias is not None:
-            self.bias = nn.parameter(torch.ones(d_model))
+            self.bias = nn.Parameter(torch.ones(d_model))
 
     def forward(self, input):
         ln = F.layer_norm(
