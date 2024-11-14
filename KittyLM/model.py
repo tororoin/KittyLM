@@ -17,7 +17,7 @@ class KittyLMConfig:
     n_heads = 12
     d_model = 768
     dropout = 0.0
-    bias = True
+    bias = None
 
 class KittyLMBlock(nn.Module):
     def __init__(self, config):

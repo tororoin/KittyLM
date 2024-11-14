@@ -23,7 +23,7 @@ class Attention(nn.Module):
         self.q_proj = nn.Linear(config.d_model, config.d_model, bias = config.bias)
         self.k_proj = nn.Linear(config.d_model, config.d_model, bias = config.bias)
         self.v_proj = nn.Linear(config.d_model, config.d_model, bias = config.bias)
-        self.c_attn = nn.Linear(config.d_model, 3 * config.d_model, bias=config.bias)
+        
         # final projection after attention
         self.projection = nn.Linear(config.d_model, config.d_model, bias = config.bias)
 
