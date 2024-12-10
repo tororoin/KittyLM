@@ -1,9 +1,9 @@
 import math
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+#import torch.nn.functional as F
 
-from layers import MLP, Attention, LayerNorm
+from .layers import MLP, Attention, LayerNorm
 
 class KittyLMConfig:
     """
@@ -22,16 +22,16 @@ class KittyLMConfig:
 class KittyLMBlock(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.preln = LayerNorm(config.d_model, bias = config.bias)
+        self.preln = LayerNorm(d_model = config.d_model, bias = config.bias)
         self.attention = Attention(config)
-        self.postln = LayerNorm(config.d_model, bias = config.bias)
+        self.postln = LayerNorm(d_model = config.d_model, bias = config.bias)
         self.mlp = MLP(config)
 
     def forward(self, input):
-        input = self.preln(input)
-        input = self.attention(input)
-        input = self.postln(input)
-        output = self.mlp(input)
+        x = self.preln(input)
+        x = self.attention(x)
+        x = self.postln(x)
+        output = self.mlp(x)
         return output
         # pass
 
@@ -79,7 +79,7 @@ class KittyLM(nn.Module):
 
         token_embeddings = self.token_embeddings(input_ids)
         position_ids = torch.arange(0, T, dtype=torch.long, device=input_ids.device).unsqueeze(0)
-        position_embeddings = self.position_embedding(position_ids)
+        position_embeddings = self.position_embeddings(position_ids)
 
         x = token_embeddings + position_embeddings
         x = self.dropout(x)
@@ -89,5 +89,17 @@ class KittyLM(nn.Module):
         x = self.ln_f(x)
         logits = self.lm_head(x)
         return logits
+    
+    def autoregressive_generate(self, idx, max_new_tokens, temperature = 1.0, top_k = None):
+        for _ in range(max_new_tokens):
+            # crop sequence context if growing longer than block size
+            idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:]
+            logits = self(idx_cond)
+            # get logits at last step
+            logits = logits[:, -1, :]
+            probabilities = torch.softmax(logits, dim = -1) # softmax across last dim i.e. vocab size
+            idx_next = torch.multinomial(probabilities, num_samples = 1)
+            idx = torch.cat((idx, idx_next), dim = 1)
+        return idx
 
     

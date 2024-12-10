@@ -71,8 +71,8 @@ class LayerNorm(nn.Module):
     def __init__(self, d_model, bias):
         super().__init__()
         self.weight = nn.Parameter(torch.ones(d_model))
-        if bias is not None:
-            self.bias = nn.Parameter(torch.ones(d_model))
+        
+        self.bias = nn.Parameter(torch.ones(d_model)) if bias else None
 
     def forward(self, input):
         ln = F.layer_norm(
